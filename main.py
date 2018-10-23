@@ -20,7 +20,7 @@ def main():
 
     try:
         if args.command == "split":
-            split(args.dataset, args.ratio)
+            split(args.dataset, "output", args.ratio)
     except COCOToolsError as e:
         print(f'error: {e}')
         exit(1)

@@ -1,10 +1,11 @@
 import json
 import pandas as pd
 import numpy as np
+from pathlib import Path
 from coco_tools.error import COCOToolsError
 
 
-def split(dataset, ratio):
+def split(dataset, output_path, ratio):
     """Splits the dataset into multiple parts based on the given ratio.
 
     Within the dataset, one image can have multiple annotations. `split` splits
@@ -15,6 +16,9 @@ def split(dataset, ratio):
     the dataset into three datasets containing `700`, `200` and `100`
     respectively.
     """
+
+    # Create the output path.
+    output_path = Path(output_path)
 
     # Normalize the ratio.
     ratio = __extract_ratio(ratio)
@@ -31,7 +35,7 @@ def split(dataset, ratio):
     images = raw_data.pop("images")
     annotations = raw_data.pop("annotations")
 
-    # Initialize the new datas.
+    # Initialize the new datas and datasets (the filenames).
     new_datas = []
     for _ in ratio:
         new_datas.append(raw_data.copy())
@@ -39,10 +43,10 @@ def split(dataset, ratio):
     # Split the data.
     __split_data(new_datas, ratio, images, annotations)
 
-    for new_data in new_datas:
-        print(len(new_data["images"]))
-
-    return new_datas
+    # Output the results to the corresponding files.
+    for (i, new_data) in enumerate(new_datas):
+        with open(str(output_path / str(i)), "w") as output_file:
+            json.dump(new_data, output_file)
 
 
 def __split_data(datas, ratio, images, annotations):
@@ -76,7 +80,11 @@ def __split_data(datas, ratio, images, annotations):
         # Set the images on the data.
         data["images"] = images[mask].to_dict("records")
 
-    pass
+        # Set the annotations on the data.
+        common = images[mask].merge(
+            annotations, left_on="id", right_on="image_id", how="inner")
+        data["annotations"] = annotations[annotations.image_id.isin(
+            common.image_id)].to_dict("records")
 
 
 def __extract_ratio(ratio):
