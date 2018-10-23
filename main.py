@@ -8,19 +8,20 @@ def main():
         help="Possible operations", dest="command")
 
     split_parser = subparsers.add_parser("split", help="Splits a dataset")
-    split_parser.add_argument("dataset", help="The dataset to split")
     split_parser.add_argument(
-        "ratio", help="The ratio to split by (e.g. 70:20:10)")
+        "-i", "--dataset", help="The dataset to split", default="data.json")
+    split_parser.add_argument(
+        "-r", "--ratio", help="The ratio to split by (e.g. 70:20:10)", default="70:20:10")
 
     merge_parser = subparsers.add_parser("merge", help="Merges datasets")
-    merge_parser.add_argument("datasets", nargs="+",
+    merge_parser.add_argument("--input", nargs="+",
                               help="The datasets to merge")
 
     args = parser.parse_args()
 
     try:
         if args.command == "split":
-            split(args.dataset, "output", args.ratio)
+            split(args.dataset, args.ratio)
     except COCOToolsError as e:
         print(f'error: {e}')
         exit(1)

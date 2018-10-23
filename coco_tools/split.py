@@ -5,7 +5,7 @@ from pathlib import Path
 from coco_tools.error import COCOToolsError
 
 
-def split(dataset, output_path, ratio):
+def split(input_path, ratio):
     """Splits the dataset into multiple parts based on the given ratio.
 
     Within the dataset, one image can have multiple annotations. `split` splits
@@ -17,8 +17,8 @@ def split(dataset, output_path, ratio):
     respectively.
     """
 
-    # Create the output path.
-    output_path = Path(output_path)
+    # Create proper input and output paths.
+    input_path = Path(input_path)
 
     # Normalize the ratio.
     ratio = __extract_ratio(ratio)
@@ -26,16 +26,16 @@ def split(dataset, output_path, ratio):
     # Load the dataset.
     raw_data = None
     try:
-        with open(dataset, "r") as dataset_file:
+        with open(str(input_path), "r") as dataset_file:
             raw_data = json.load(dataset_file)
     except FileNotFoundError:
-        raise COCOToolsError(f"file \"{dataset}\" not found")
+        raise COCOToolsError(f"file \"{input_path}\" not found")
 
     # Extract `images` and `annotations`.
     images = raw_data.pop("images")
     annotations = raw_data.pop("annotations")
 
-    # Initialize the new datas and datasets (the filenames).
+    # Initialize the new datas.
     new_datas = []
     for _ in ratio:
         new_datas.append(raw_data.copy())
@@ -44,8 +44,11 @@ def split(dataset, output_path, ratio):
     __split_data(new_datas, ratio, images, annotations)
 
     # Output the results to the corresponding files.
+    output_names = ["train", "validation", "test"]
     for (i, new_data) in enumerate(new_datas):
-        with open(str(output_path / str(i)), "w") as output_file:
+        output_file_path = input_path.parent / \
+            Path(f"{input_path.name}_{output_names[i]}.json")
+        with open(output_file_path, "w") as output_file:
             json.dump(new_data, output_file)
 
 
@@ -98,6 +101,10 @@ def __extract_ratio(ratio):
     ratio = ratio.split(":")
     for ration in ratio:
         ration.strip()
+
+    # Verify length of ratio.
+    if len(ratio) != 3:
+        raise COCOToolsError("ratio should have length 3")
 
     # Parse, and hence, verify.
     for (i, ration) in enumerate(ratio):
