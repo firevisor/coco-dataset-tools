@@ -1,2 +1,2 @@
 def split():
-    print("Unimplemented!")
+    raise NotImplementedError()
