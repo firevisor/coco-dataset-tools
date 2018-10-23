@@ -5,7 +5,7 @@ from pathlib import Path
 from coco_tools.error import COCOToolsError
 
 
-def split(input_path, ratio):
+def split(dataset_path, ratio, names):
     """Splits the dataset into multiple parts based on the given ratio.
 
     Within the dataset, one image can have multiple annotations. `split` splits
@@ -17,19 +17,22 @@ def split(input_path, ratio):
     respectively.
     """
 
-    # Create proper input and output paths.
-    input_path = Path(input_path)
-
-    # Normalize the ratio.
+    # Extract and validate the inputs.
+    dataset_path = Path(dataset_path)
     ratio = __extract_ratio(ratio)
+    names = __extract_names(names)
 
-    # Load the dataset.
+    # Some additional input validation.
+    if len(ratio) != len(names):
+        raise COCOToolsError("ratio and names should be of same length")
+
+    # Load the dataset from `dataset_path`.
     raw_data = None
     try:
-        with open(str(input_path), "r") as dataset_file:
+        with open(str(dataset_path), "r") as dataset_file:
             raw_data = json.load(dataset_file)
     except FileNotFoundError:
-        raise COCOToolsError(f"file \"{input_path}\" not found")
+        raise COCOToolsError(f"file \"{dataset_path}\" not found")
 
     # Extract `images` and `annotations`.
     images = raw_data.pop("images")
@@ -44,11 +47,8 @@ def split(input_path, ratio):
     __split_data(new_datas, ratio, images, annotations)
 
     # Output the results to the corresponding files.
-    output_names = ["train", "validation", "test"]
     for (i, new_data) in enumerate(new_datas):
-        output_file_path = input_path.parent / \
-            Path(f"{input_path.name}_{output_names[i]}.json")
-        with open(output_file_path, "w") as output_file:
+        with open(__derive_path(dataset_path, names[i]), "w") as output_file:
             json.dump(new_data, output_file)
 
 
@@ -90,6 +90,15 @@ def __split_data(datas, ratio, images, annotations):
             common.image_id)].to_dict("records")
 
 
+def __derive_path(dataset_path, name):
+    """Derives the output path given `dataset_path` and `name`.
+    """
+
+    output_filename = Path(f"{str(dataset_path.stem)}_{name}.json")
+    output_path = dataset_path.parent / output_filename
+    return output_path
+
+
 def __extract_ratio(ratio):
     """Splits, verifies and normalizes the ratio.
 
@@ -121,3 +130,13 @@ def __extract_ratio(ratio):
         ratio[i] = ration
 
     return ratio
+
+
+def __extract_names(names):
+    """Splits the names.
+    """
+
+    names = names.split(":")
+    for name in names:
+        name.strip()
+    return names
