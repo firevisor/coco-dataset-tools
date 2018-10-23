@@ -1,4 +1,6 @@
 import json
+import pandas as pd
+import numpy as np
 from coco_tools.error import COCOToolsError
 
 
@@ -18,54 +20,69 @@ def split(dataset, ratio):
     ratio = __extract_ratio(ratio)
 
     # Load the dataset.
-    data = None
+    raw_data = None
     try:
         with open(dataset, "r") as dataset_file:
-            data = json.load(dataset_file)
+            raw_data = json.load(dataset_file)
     except FileNotFoundError:
         raise COCOToolsError(f"file \"{dataset}\" not found")
 
     # Extract `images` and `annotations`.
-    images = data.pop("images")
-    annotations = data.pop("annotations")
-
-    # Generate an index.
-    index = __generate_index(annotations)
-    print(index)
+    images = raw_data.pop("images")
+    annotations = raw_data.pop("annotations")
 
     # Initialize the new datas.
     new_datas = []
     for _ in ratio:
-        new_datas.append(data.copy())
+        new_datas.append(raw_data.copy())
+
+    # Split the data.
+    __split_data(new_datas, ratio, images, annotations)
+
+    for new_data in new_datas:
+        print(len(new_data["images"]))
 
     return new_datas
 
 
-def __generate_index(annotations):
-    """Generates an index which maps the image_id to the index of the annotation
-    within the list.
+def __split_data(datas, ratio, images, annotations):
+    """Sets `images` and `annotations` on the `datas` based on `ratio`.
+
+    Take note that this method mutates `datas`. It is done this way because
+    `datas` should contain the additional data as part of a COCO dataset.
+
+    `pandas` is used here to perform the splitting/partitioning.
     """
 
-    index = {}
+    # Create data frames.
+    images = pd.DataFrame(images)
+    annotations = pd.DataFrame(annotations)
 
-    for (i, annotation) in enumerate(annotations):
-        image_id = annotation["image_id"]
-        id = annotation["id"]
+    # Create the base mask
+    base_mask = np.random.rand(len(images))
 
-        try:
-            index[image_id]
-        except KeyError:
-            index[image_id] = []
+    # Track the current sum of ratios. This is used when finding the range to
+    # compare to.
+    ratio_sum = 0
 
-        index[image_id].append(id)
+    # Iterate through each ratio and split the data.
+    for (i, ration) in enumerate(ratio):
+        data = datas[i]
 
-    return index
+        # Create the mask.
+        mask = (base_mask >= ratio_sum) & (base_mask < ratio_sum + ration)
+        ratio_sum += ration
+
+        # Set the images on the data.
+        data["images"] = images[mask].to_dict("records")
+
+    pass
 
 
 def __extract_ratio(ratio):
     """Splits, verifies and normalizes the ratio.
 
-    For example, a ratio of `70:20:30` will become `[0.58, 0.17, 0.25]`. The
+    For example, a ratio of `70: 20: 30` will become `[0.58, 0.17, 0.25]`. The
     total does not need to add up to `100`.
     """
 
@@ -77,9 +94,9 @@ def __extract_ratio(ratio):
     # Parse, and hence, verify.
     for (i, ration) in enumerate(ratio):
         try:
-            ration = int(ration)
+            ration = float(ration)
         except ValueError:
-            raise COCOToolsError(f'ratio {ration} should be an integer')
+            raise COCOToolsError(f'ratio {ration} should be a float')
         ratio[i] = ration
 
     # Normalize based on sum.
