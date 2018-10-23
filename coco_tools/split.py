@@ -1,2 +1,2 @@
-def split():
-    raise NotImplementedError()
+def split(dataset):
+    print(dataset)

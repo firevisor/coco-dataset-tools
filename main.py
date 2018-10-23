@@ -4,7 +4,8 @@ import coco_tools
 
 def main():
     parser = ArgumentParser(description="Useful operations for COCO datasets")
-    subparsers = parser.add_subparsers(help="Possible operations")
+    subparsers = parser.add_subparsers(
+        help="Possible operations", dest="command")
 
     split_parser = subparsers.add_parser("split", help="Splits a dataset")
     split_parser.add_argument("dataset", help="The dataset to split")
@@ -15,7 +16,8 @@ def main():
 
     args = parser.parse_args()
 
-    print(args)
+    if args.command == "split":
+        coco_tools.split(args.dataset)
 
 
 if __name__ == "__main__":
