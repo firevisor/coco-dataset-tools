@@ -39,9 +39,7 @@ def split(dataset_path, ratio, names):
     annotations = raw_data.pop("annotations")
 
     # Initialize the new datas.
-    new_datas = []
-    for _ in ratio:
-        new_datas.append(raw_data.copy())
+    new_datas = [raw_data.copy() for _ in ratio]
 
     # Split the data.
     __split_data(new_datas, ratio, images, annotations)
@@ -107,36 +105,24 @@ def __extract_ratio(ratio):
     """
 
     # Split and strip.
-    ratio = ratio.split(":")
-    for ration in ratio:
-        ration.strip()
+    ratio = [ration.strip() for ration in ratio.split(":")]
 
     # Verify length of ratio.
     if len(ratio) != 3:
         raise COCOToolsError("ratio should have length 3")
 
     # Parse, and hence, verify.
-    for (i, ration) in enumerate(ratio):
-        try:
-            ration = float(ration)
-        except ValueError:
-            raise COCOToolsError(f'ratio {ration} should be a float')
-        ratio[i] = ration
+    try:
+        ratio = map(float, ratio)
+    except ValueError:
+        raise COCOToolsError(f'ratio should be a floats')
 
     # Normalize based on sum.
-    total = sum(ratio)
-    for (i, ration) in enumerate(ratio):
-        ration /= total
-        ratio[i] = ration
-
-    return ratio
+    return map(lambda ration: ration / sum(ratio), ratio)
 
 
 def __extract_names(names):
     """Splits the names.
     """
 
-    names = names.split(":")
-    for name in names:
-        name.strip()
-    return names
+    return [name.strip() for name in names.split(":")]
