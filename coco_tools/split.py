@@ -113,12 +113,12 @@ def __extract_ratio(ratio):
 
     # Parse, and hence, verify.
     try:
-        ratio = map(float, ratio)
+        ratio = list(map(float, ratio))
     except ValueError:
         raise COCOToolsError(f'ratio should be a floats')
 
     # Normalize based on sum.
-    return map(lambda ration: ration / sum(ratio), ratio)
+    return list(map(lambda ration: ration / sum(ratio), ratio))
 
 
 def __extract_names(names):
