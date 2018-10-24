@@ -64,7 +64,8 @@ def __split_data(datas, ratio, images, annotations):
     annotations = pd.DataFrame(annotations)
 
     # Create the base mask
-    base_mask = np.random.rand(len(images))
+    base_mask = np.arange(0, 1, 1 / len(images))
+    np.random.shuffle(base_mask)
 
     # Track the current sum of ratios. This is used when finding the range to
     # compare to.
