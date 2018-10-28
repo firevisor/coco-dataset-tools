@@ -1,0 +1,2 @@
+class COCOToolsError(BaseException):
+    pass

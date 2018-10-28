@@ -1,2 +1,2 @@
 def merge():
-    print("Unimplemented!")
+    raise NotImplementedError()
