@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from coco_tools import COCOToolsError, split
+from coco_tools import COCOToolsError, split, merge
 
 
 def main():
@@ -16,14 +16,18 @@ def main():
         "-n", "--names", help="The names for each split (e.g. train:validation:test)", default="train:validation:test")
 
     merge_parser = subparsers.add_parser("merge", help="Merges datasets")
-    merge_parser.add_argument("--input", nargs="+",
-                              help="The datasets to merge")
+    merge_parser.add_argument(
+        "-i", "--datasets", nargs="+", help="The datasets to merge", default=[])
+    merge_parser.add_argument(
+        "-n", "--name", help="The name for merged dataset", default="merge")
 
     args = parser.parse_args()
 
     try:
         if args.command == "split":
             split(args.dataset, args.ratio, args.names)
+        elif args.command == "merge":
+            merge(args.datasets, args.name)
     except COCOToolsError as e:
         print(f'error: {e}')
         exit(1)
