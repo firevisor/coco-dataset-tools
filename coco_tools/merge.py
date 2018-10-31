@@ -110,7 +110,7 @@ def __extract_images(datas):
         duplicate_ids = images.index.intersection(new_images.index)
 
         for id in duplicate_ids.values:
-            print(f"[WARN] duplicate id found: {id}")
+            print(f"[WARN] duplicate image id found: {id}")
 
         images = pd.concat([images, new_images], ignore_index=False)
         images = images.drop_duplicates()
