@@ -29,12 +29,23 @@ def merge(dataset_paths, name):
             raise COCOToolsError(f"file \"{dataset_path}\" not found")
 
     # Extract the various properties.
-    info = __extract_info(raw_datas)
-    licenses = __extract_licenses(raw_datas)
-    categories = __extract_categories(raw_datas)
-    images = __extract_images(raw_datas)
+    new_data = {}
+    new_data["info"] = __extract_info(raw_datas)
+    new_data["licenses"] = __extract_licenses(raw_datas)
+    new_data["categories"] = __extract_categories(raw_datas)
+    new_data["images"] = __extract_images(raw_datas)
 
-    raise NotImplementedError()
+    with open(__derive_path(dataset_paths[0], name), "w") as output_file:
+        json.dump(new_data, output_file)
+
+
+def __derive_path(dataset_path, name):
+    """Derives the output path given `dataset_path` and `name`.
+    """
+
+    output_filename = Path(f"{name}.json")
+    output_path = dataset_path.parent / output_filename
+    return output_path
 
 
 def __extract_info(datas):
