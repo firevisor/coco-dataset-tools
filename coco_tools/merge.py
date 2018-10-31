@@ -34,6 +34,7 @@ def merge(dataset_paths, name):
     new_data["licenses"] = __extract_licenses(raw_datas)
     new_data["categories"] = __extract_categories(raw_datas)
     new_data["images"] = __extract_images(raw_datas)
+    new_data["annotations"] = __extract_annotations(raw_datas)
 
     with open(__derive_path(dataset_paths[0], name), "w") as output_file:
         json.dump(new_data, output_file)
@@ -127,3 +128,29 @@ def __extract_images(datas):
         images = images.drop_duplicates()
 
     return images.to_dict("records")
+
+
+def __extract_annotations(datas):
+    """Merge all the `annotations` from each dataset.
+
+    Annotations are identified by [`id`, `image_id`]. Warnings are logged on
+    each duplicate.
+    """
+
+    annotations = pd.DataFrame()
+
+    for data in datas:
+        new_annotations = pd.DataFrame(data.pop("annotations"))
+        new_annotations = new_annotations.set_index(["id", "image_id"])
+
+        duplicate_ids = annotations.index.intersection(new_annotations.index)
+
+        for id in duplicate_ids.values:
+            print(f"[WARN] duplicate annotation id found: {id}")
+
+        annotations = pd.concat(
+            [annotations, new_annotations], ignore_index=False)
+        annotations = annotations.loc[annotations.astype(
+            str).drop_duplicates().index]
+
+    return annotations.to_dict("records")
