@@ -1,4 +1,5 @@
 import json
+import pandas as pd
 from pathlib import Path
 from coco_tools.error import COCOToolsError
 
@@ -31,6 +32,7 @@ def merge(dataset_paths, name):
     info = __extract_info(raw_datas)
     licenses = __extract_licenses(raw_datas)
     categories = __extract_categories(raw_datas)
+    images = __extract_images(raw_datas)
 
     raise NotImplementedError()
 
@@ -77,6 +79,7 @@ def __extract_categories(datas):
         for new_category in new_categories:
             found = False
 
+            # Verify that `new_category` is unique/consistent.
             for category in categories:
                 if category["name"] != new_category["name"]:
                     continue
@@ -90,3 +93,26 @@ def __extract_categories(datas):
                 categories.append(new_category)
 
     return categories
+
+
+def __extract_images(datas):
+    """Merge all the `images` from each dataset.
+
+    Images are identified by `id`. Warnings are logged on each duplicate.
+    """
+
+    images = pd.DataFrame()
+
+    for data in datas:
+        new_images = pd.DataFrame(data.pop("images"))
+        new_images = new_images.set_index("id")
+
+        duplicate_ids = images.index.intersection(new_images.index)
+
+        for id in duplicate_ids.values:
+            print(f"[WARN] duplicate id found: {id}")
+
+        images = pd.concat([images, new_images], ignore_index=False)
+        images = images.drop_duplicates()
+
+    return images.to_dict("records")
