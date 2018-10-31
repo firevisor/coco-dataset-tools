@@ -30,6 +30,7 @@ def merge(dataset_paths, name):
     # Extract the various properties.
     info = __extract_info(raw_datas)
     licenses = __extract_licenses(raw_datas)
+    categories = __extract_categories(raw_datas)
 
     raise NotImplementedError()
 
@@ -48,7 +49,7 @@ def __extract_info(datas):
 
 
 def __extract_licenses(datas):
-    """Combine all the `licenses` from each dataset, ignoring duplicates.
+    """Merge all the `licenses` from each dataset, ignoring duplicates.
     """
 
     licenses = set()
@@ -58,3 +59,34 @@ def __extract_licenses(datas):
         licenses = licenses.union(set(new_licenses))
 
     return list(licenses)
+
+
+def __extract_categories(datas):
+    """Merge all the `categories` from each dataset.
+
+    Duplicates are ignored if the categories are identical. However, if there
+    are inconsistencies in the `id` for each category (which are identified by
+    their `name`), an error will be raised.
+    """
+
+    categories = []
+
+    for data in datas:
+        new_categories = data.pop("categories")
+
+        for new_category in new_categories:
+            found = False
+
+            for category in categories:
+                if category["name"] != new_category["name"]:
+                    continue
+
+                found = True
+
+                if category != new_category:
+                    raise COCOToolsError("inconsistent category found")
+
+            if not found:
+                categories.append(new_category)
+
+    return categories
