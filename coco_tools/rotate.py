@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def rotate(dataset_path, degrees):
     """Rotates the dataset clockwise by the given number of degrees.
 
@@ -10,3 +13,20 @@ def rotate(dataset_path, degrees):
     """
 
     raise NotImplementedError()
+
+
+def __rotate_point(point, origin, degrees):
+    """Rotates the point around the origin by the given number of degrees, in
+    the counter-clockwise direction.
+    """
+
+    x, y = point[0] - origin[0], point[1] - origin[1]
+
+    radians = np.deg2rad(degrees)
+    cos = np.cos(radians)
+    sin = np.sin(radians)
+
+    rotation = np.matrix([[cos, sin], [-sin, cos]])
+    result = np.dot(rotation, [x, y])
+
+    return [round(float(result.T[0])) + origin[0], round(float(result.T[1])) + origin[1]]

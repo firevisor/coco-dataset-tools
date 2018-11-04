@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from coco_tools import COCOToolsError, split
+from coco_tools import COCOToolsError, split, rotate
 
 
 def main():
@@ -22,15 +22,17 @@ def main():
     rotation_parser = subparsers.add_parser(
         "rotate", help="Rotates a dataset")
     rotation_parser.add_argument(
-        "-i", "--dataset", help="The dataset to rotate")
+        "-i", "--dataset", help="The dataset to rotate", default="data.json")
     rotation_parser.add_argument(
-        "-d", "--degrees", help="The number of degrees to rotate by (clockwise)")
+        "-d", "--degrees", help="The number of degrees to rotate by (counter-clockwise)", default=0)
 
     args = parser.parse_args()
 
     try:
         if args.command == "split":
             split(args.dataset, args.ratio, args.names)
+        elif args.command == "rotate":
+            rotate(args.dataset, args.degrees)
     except COCOToolsError as e:
         print(f'error: {e}')
         exit(1)
