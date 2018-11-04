@@ -19,6 +19,13 @@ def main():
     merge_parser.add_argument("--input", nargs="+",
                               help="The datasets to merge")
 
+    rotation_parser = subparsers.add_parser(
+        "rotate", help="Rotates a dataset")
+    rotation_parser.add_argument(
+        "-i", "--dataset", help="The dataset to rotate")
+    rotation_parser.add_argument(
+        "-d", "--degrees", help="The number of degrees to rotate by (clockwise)")
+
     args = parser.parse_args()
 
     try:
