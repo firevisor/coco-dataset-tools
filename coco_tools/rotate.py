@@ -78,14 +78,15 @@ def __rotate_annotations(degrees, images, annotations):
     annotations = pd.DataFrame(annotations)
 
     # Join the two data frames on `id` and `image_id`.
-    annotations = annotations.join(images.set_index("id"), on="image_id")
+    annotations = annotations.join(
+        images.set_index("id"), on="image_id", rsuffix="_img")
 
     # Rotate each row.
     annotations = annotations.apply(
         lambda ann: __rotate_annotation(degrees, ann), axis=1)
 
     # Remove the `width` and `height` columns.
-    annotations = annotations.drop(["width", "height"], axis=1)
+    annotations = annotations.drop(["width_img", "height_img"], axis=1)
 
     return annotations.to_dict("records")
 
