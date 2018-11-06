@@ -9,6 +9,8 @@ from coco_tools.error import COCOToolsError
 def rotate(dataset_path, degrees):
     """Rotates the dataset counter-clockwise by the given number of degrees.
 
+    Currently, only degrees in increments of 90 are accepted.
+
     This assumes that the annotations in the dataset are all of the "Object
     Detection" kind. Also assumed that `iscrowd` is 0, which means that polygon
     segmentation is used.
@@ -18,6 +20,11 @@ def rotate(dataset_path, degrees):
     """
 
     dataset_path = Path(dataset_path)
+    degrees = int(degrees)
+
+    if degrees % 90 != 0:
+        raise COCOToolsError(f"{degrees} degrees is not a multiple of 90")
+    degrees %= 360
 
     raw_data = None
     try:
@@ -67,10 +74,8 @@ def __rotate_annotation(degrees, annotation):
     """Rotates the annotation by the given degrees counter-clockwise.
     """
 
-    # Calculate the `origin`, which will be used to rotate everything.
-    width = annotation["width"]
-    height = annotation["height"]
-    origin = [width / 2, height / 2]
+    # Origin zero will be used to rotate everything.
+    origin = [0, 0]
 
     # Caculate the points of the bbox.
     bbox = annotation["bbox"]
@@ -100,9 +105,10 @@ def __rotate_annotation(degrees, annotation):
     # Rotate each point of the segmentation.
     segmentation = [__rotate_point(point, origin, degrees)
                     for point in segmentation]
+    segmentation = list(map(int, list(np.array(segmentation).ravel())))
 
     # Set the segmentation back.
-    annotation["segmentation"] = segmentation
+    annotation["segmentation"] = [segmentation]
 
     return annotation
 
