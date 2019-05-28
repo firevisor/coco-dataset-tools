@@ -5,7 +5,7 @@ from pathlib import Path
 from coco_tools.error import COCOToolsError
 
 
-def split(dataset_path, ratio, names):
+def split(orig_anno_file, out_anno_files, ratio):
     """Splits the dataset into multiple parts based on the given ratio.
 
     Within the dataset, one image can have multiple annotations. `split` splits
@@ -18,84 +18,43 @@ def split(dataset_path, ratio, names):
     """
 
     # Extract and validate the inputs.
-    dataset_path = Path(dataset_path)
-    ratio = __extract_ratio(ratio)
-    names = __extract_names(names)
-
+    ratios = __extract_ratio(ratio)
     # Some additional input validation.
-    if len(ratio) != len(names):
+    if len(ratios) != len(out_anno_files):
         raise COCOToolsError("ratio and names should be of same length")
 
     # Load the dataset from `dataset_path`.
     raw_data = None
     try:
-        with open(str(dataset_path), "r") as dataset_file:
+        with open(str(orig_anno_file), "r") as dataset_file:
             raw_data = json.load(dataset_file)
     except FileNotFoundError:
         raise COCOToolsError(f"file \"{dataset_path}\" not found")
 
     # Extract `images` and `annotations`.
-    images = raw_data.pop("images")
-    annotations = raw_data.pop("annotations")
+    images = pd.DataFrame(raw_data.pop("images"))
+    annotations = pd.DataFrame(raw_data.pop("annotations"))
+    
+    # Split annotation data
+    cumsum_ratios = np.cumsum(ratios)
+    
+    subsets = np.split(images.sample(frac=1),
+                    [int(cumsum_ratios[0]*len(images)) for i in range(len(cumsum_ratios) - 1)])
 
-    # Initialize the new datas.
-    new_datas = [raw_data.copy() for _ in ratio]
+    all_subset_annos = [annotations[annotations['image_id'].isin(subset['id'])]
+                    for subset in subsets]
 
-    # Split the data.
-    __split_data(new_datas, ratio, images, annotations)
+    all_subset_data = []
+    for subset, subset_annos in zip(subsets, all_subset_annos):
+        new_data = {'images': subset.to_dict('records'),
+                    'categories': raw_data['categories'],
+                    'annotations': subset_annos.to_dict('records')}
+        all_subset_data.append(new_data)
 
-    # Output the results to the corresponding files.
-    for (i, new_data) in enumerate(new_datas):
-        with open(__derive_path(dataset_path, names[i]), "w") as output_file:
-            json.dump(new_data, output_file)
-
-
-def __split_data(datas, ratio, images, annotations):
-    """Sets `images` and `annotations` on the `datas` based on `ratio`.
-
-    Take note that this method mutates `datas`. It is done this way because
-    `datas` should contain the additional data as part of a COCO dataset.
-
-    `pandas` is used here to perform the splitting/partitioning.
-    """
-
-    # Create data frames.
-    images = pd.DataFrame(images)
-    annotations = pd.DataFrame(annotations)
-
-    # Create the base mask
-    base_mask = np.arange(0, 1, 1 / len(images))
-    np.random.shuffle(base_mask)
-
-    # Track the current sum of ratios. This is used when finding the range to
-    # compare to.
-    ratio_sum = 0
-
-    # Iterate through each ratio and split the data.
-    for (i, ration) in enumerate(ratio):
-        data = datas[i]
-
-        # Create the mask.
-        mask = (base_mask >= ratio_sum) & (base_mask < ratio_sum + ration)
-        ratio_sum += ration
-
-        # Set the images on the data.
-        data["images"] = images[mask].to_dict("records")
-
-        # Set the annotations on the data.
-        common = images[mask].merge(
-            annotations, left_on="id", right_on="image_id", how="inner")
-        data["annotations"] = annotations[annotations.image_id.isin(
-            common.image_id)].to_dict("records")
-
-
-def __derive_path(dataset_path, name):
-    """Derives the output path given `dataset_path` and `name`.
-    """
-
-    output_filename = Path(f"{str(dataset_path.stem)}_{name}.json")
-    output_path = dataset_path.parent / output_filename
-    return output_path
+    
+    for subset_data, anno_file in zip(all_subset_data, out_anno_files):
+        with open(anno_file, 'w') as fo:
+            json.dump(subset_data, fo)
 
 
 def __extract_ratio(ratio):
@@ -120,10 +79,3 @@ def __extract_ratio(ratio):
 
     # Normalize based on sum.
     return list(map(lambda ration: ration / sum(ratio), ratio))
-
-
-def __extract_names(names):
-    """Splits the names.
-    """
-
-    return [name.strip() for name in names.split(":")]

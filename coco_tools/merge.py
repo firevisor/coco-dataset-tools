@@ -1,10 +1,11 @@
 import json
 import pandas as pd
 from pathlib import Path
+import shutil
 from coco_tools.error import COCOToolsError
 
 
-def merge(dataset_paths, name):
+def merge_anno(dataset_paths, out_path):
     """Merges the datasets at the given paths.
 
     Will merge `images`, `annotations`, `licenses` and `categories`. For `images`
@@ -13,7 +14,6 @@ def merge(dataset_paths, name):
 
     # Extract and validate inputs
     dataset_paths = list(map(Path, dataset_paths))
-    name = name.strip()
 
     # Perform basic validation.
     if len(dataset_paths) < 2:
@@ -30,14 +30,32 @@ def merge(dataset_paths, name):
 
     # Extract the various properties.
     new_data = {}
-    new_data["info"] = __extract_info(raw_datas)
-    new_data["licenses"] = __extract_licenses(raw_datas)
+    # new_data["info"] = __extract_info(raw_datas)
+    # new_data["licenses"] = __extract_licenses(raw_datas)
     new_data["categories"] = __extract_categories(raw_datas)
     new_data["images"] = __extract_images(raw_datas)
     new_data["annotations"] = __extract_annotations(raw_datas)
 
-    with open(__derive_path(dataset_paths[0], name), "w") as output_file:
+    out_path = Path(out_path)
+    out_path.parent.mkdir(exist_ok=True)
+    with open(str(out_path), "w") as output_file:
         json.dump(new_data, output_file)
+
+
+def merge_images(annofiles, imagedirs, outdir):
+    outdir = Path(outdir)
+    outdir.mkdir(exist_ok=True)
+    for annofile, imagedir in zip(annofiles, imagedirs):
+        anno = json.load(open(annofile, 'r'))
+        imagedir = Path(imagedir)
+        images = anno['images']
+        for img in images:
+            file_name = Path(img['file_name'])
+            file_path = imagedir / file_name
+            if not file_path.is_file():
+                raise FileNotFoundError("Image file %s not found" % str(file_path))
+            out_path = outdir / file_name
+            shutil.copy(str(file_path), str(out_path))
 
 
 def __derive_path(dataset_path, name):
@@ -99,7 +117,8 @@ def __extract_categories(datas):
                 found = True
 
                 if category != new_category:
-                    raise COCOToolsError("inconsistent category found")
+                    category.update(new_category)
+                    # raise COCOToolsError("inconsistent category found")
 
             if not found:
                 categories.append(new_category)
@@ -114,7 +133,7 @@ def __extract_images(datas):
     """
 
     images = pd.DataFrame()
-
+    
     for data in datas:
         new_images = pd.DataFrame(data.pop("images"))
         new_images = new_images.set_index("id")
@@ -125,8 +144,10 @@ def __extract_images(datas):
             print(f"[WARN] duplicate image id found: {id}")
 
         images = pd.concat([images, new_images], ignore_index=False)
-        images = images.drop_duplicates()
+        # images = images.drop_duplicates()
 
+    images = images.reset_index()
+    images['id'] = images['id'].astype(str)  # Convert all image IDs to string, do the same for image_ids from annotations
     return images.to_dict("records")
 
 
@@ -153,4 +174,6 @@ def __extract_annotations(datas):
         annotations = annotations.loc[annotations.astype(
             str).drop_duplicates().index]
 
+    annotations = annotations.reset_index()
+    annotations['image_id'] = annotations['image_id'].astype(str)
     return annotations.to_dict("records")
