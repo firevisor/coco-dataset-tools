@@ -37,10 +37,10 @@ def split(orig_anno_file, out_anno_files, ratio):
     
     # Split annotation data
     cumsum_ratios = np.cumsum(ratios)
-    
+    print(cumsum_ratios) 
     subsets = np.split(images.sample(frac=1),
-                    [int(cumsum_ratios[0]*len(images)) for i in range(len(cumsum_ratios) - 1)])
-
+                    [int(cumsum_ratios[i]*len(images)) for i in range(len(cumsum_ratios) - 1)])
+    print([len(s) for s in subsets])
     all_subset_annos = [annotations[annotations['image_id'].isin(subset['id'])]
                     for subset in subsets]
 
