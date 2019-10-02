@@ -63,7 +63,7 @@ def __split_data(datas, ratio, images, annotations):
     images = pd.DataFrame(images)
     annotations = pd.DataFrame(annotations)
 
-    # Create the base mask
+    # Create the base mask.
     base_mask = np.arange(0, 1, 1 / len(images))
     np.random.shuffle(base_mask)
 
