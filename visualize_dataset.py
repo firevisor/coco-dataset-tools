@@ -280,7 +280,7 @@ def draw_mask(im, mask, box, label, alpha=0.5, color=None, linear=False):
     im = viz.draw_boxes(im, box[np.newaxis, :], [label], color=color_tuple)
     cc = 1
     if linear:
-        label, cc = scipy.ndimage.measurements.label(
+        _, cc = scipy.ndimage.measurements.label(
             mask, structure=np.ones((3, 3)))
     return cc == 1, im
 
@@ -290,43 +290,54 @@ def parse_args():
         description='Code for Harris corner detector tutorial.')
     parser.add_argument('--imagedir', help='Path to dataset images.')
     parser.add_argument('--jsonfile', help='Path to json file.')
-    parser.add_argument('--output')
+    parser.add_argument('--check', help='Flag to purely check JSON', action='store_true', default = False)
+    parser.add_argument('--output', help='Output Directory for images with masks', default='output_dir')
     return parser.parse_args()
 
 
 def main():
     errant_imgs = set()
     args = parse_args()
-    output_dir = args.output
-    ds = COCODetection(args.imagedir, args.jsonfile)
-    imgs = ds.load(add_gt=True, add_mask=True)
-    os.makedirs(output_dir, exist_ok=True)
-    for img in tqdm.tqdm(imgs):
-        # Get masks from "img" (it's actually the image's meta rather than the image itself)
-        # I follow the same naming from the Tensorpack's implementation of COCODetection
-        masks = getMasksFromImg(img)
-        boxes = genBoxesFromMasks(masks)
-        classes = getClassesFromImg(img)  # Class IDs
-        classes = [ds.getClassNameFromSample(
-            clsId) for clsId in classes]  # Class names
-        file_name = img['file_name']
-        image_id = img['image_id']
-        im = cv2.imread(file_name)
-        orig_im = im.copy()
-        # Draw masks, boxes and labels
-        # For images with a linear crack, erosion is performed
-        for i in range(masks.shape[0]):
-            connected, im = draw_mask(im, masks[i], boxes[i], str(
-                classes[i]), linear=(img['category_ids'] == [1]))
-            if connected == False:
-                errant_imgs.add(img['path'])
+    if args.check:
+        ds = COCODetection(args.imagedir, args.jsonfile)
+        imgs = ds.load(add_gt=True, add_mask=True)
+        for img in tqdm.tqdm(imgs):
+            masks = getMasksFromImg(img)
+            for mask in masks:
+                if 1 in img['category_ids'] or 2 in img['category_ids']:
+                    _, cc = scipy.ndimage.measurements.label(mask, structure=np.ones((3, 3)))
+                    if cc!=1: errant_imgs.add(img['path'])
+    else:
+        output_dir = args.output
+        ds = COCODetection(args.imagedir, args.jsonfile)
+        imgs = ds.load(add_gt=True, add_mask=True)
+        os.makedirs(output_dir, exist_ok=True)
+        for img in tqdm.tqdm(imgs):
+            # Get masks from "img" (it's actually the image's meta rather than the image itself)
+            # I follow the same naming from the Tensorpack's implementation of COCODetection
+            masks = getMasksFromImg(img)
+            boxes = genBoxesFromMasks(masks)
+            classes = getClassesFromImg(img)  # Class IDs
+            classes = [ds.getClassNameFromSample(
+                clsId) for clsId in classes]  # Class names
+            file_name = img['file_name']
+            image_id = img['image_id']
+            im = cv2.imread(file_name)
+            orig_im = im.copy()
+            # Draw masks, boxes and labels
+            # For images with a linear crack, erosion is performed
+            for i in range(masks.shape[0]):
+                connected, im = draw_mask(im, masks[i], boxes[i], str(
+                    classes[i]), linear=(img['category_ids'] == [1]))
+                if connected == False:
+                    errant_imgs.add(img['path'])
 
-        basename = os.path.basename(file_name)
-        output_path = os.path.join(output_dir, str(image_id) + '_' + basename)
+            basename = os.path.basename(file_name)
+            output_path = os.path.join(output_dir, str(image_id) + '_' + basename)
 
-        # merge original image to the image with labels
-        im = np.concatenate([orig_im, im], axis=1)
-        cv2.imwrite(output_path, im)
+            # merge original image to the image with labels
+            im = np.concatenate([orig_im, im], axis=1)
+            cv2.imwrite(output_path, im)
 
     # Errant Images where mask erosion separated the cracks
     if len(errant_imgs)!=0:
