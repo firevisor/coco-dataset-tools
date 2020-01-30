@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+
 import cv2
 import numpy as np
 import pandas as pd
@@ -8,19 +8,17 @@ import tqdm
 import json
 import copy
 import argparse
-
+import scipy.ndimage.measurements
 from tensorpack.utils import logger, viz
 from tensorpack.utils.timer import timed_operation
 from tensorpack.utils.palette import PALETTE_RGB
-
-from pycocotools import mask as maskUtils
-
+import pycocotools.mask as cocomask
 from six.moves import zip
 
 
 class COCODetection(object):
     # handle the weird (but standard) split of train and val
-    
+
     # Not used
     _INSTANCE_TO_BASEDIR = {
         'valminusminival2014': 'val2014',
@@ -28,7 +26,7 @@ class COCODetection(object):
     }
 
     COCO_id_to_category_id = {1: 1, 2: 2, 3: 3, 5: 4, 6: 5}
-    category_id_to_COCO_id = {v:k for k,v in COCO_id_to_category_id.items()}
+    category_id_to_COCO_id = {v: k for k, v in COCO_id_to_category_id.items()}
     """
     Mapping from the incontinuous COCO category id to an id in [1, #category]
     For your own dataset, this should usually be an identity mapping.
@@ -60,7 +58,8 @@ class COCODetection(object):
         cocoEval.evaluate()
         cocoEval.accumulate()
         cocoEval.summarize()
-        fields = ['IoU=0.5:0.95', 'IoU=0.5', 'IoU=0.75', 'small', 'medium', 'large']
+        fields = ['IoU=0.5:0.95', 'IoU=0.5',
+                  'IoU=0.75', 'small', 'medium', 'large']
         for k in range(6):
             ret['mAP(bbox)/' + fields[k]] = cocoEval.stats[k]
 
@@ -116,7 +115,8 @@ class COCODetection(object):
         """
         # ann_ids = self.coco.getAnnIds(imgIds=img['image_id'])
         # objs = self.coco.loadAnns(ann_ids)
-        objs = self.coco.imgToAnns[img['image_id']]  # equivalent but faster than the above two lines
+        # equivalent but faster than the above two lines
+        objs = self.coco.imgToAnns[img['image_id']]
 
         # clean-up boxes
         valid_objs = []
@@ -145,20 +145,25 @@ class COCODetection(object):
                         assert obj['iscrowd'] == 1
                         obj['segmentation'] = None
                     else:
-                        valid_segs = [np.asarray(p).reshape(-1, 2).astype('float32') for p in segs if len(p) >= 6]
+                        valid_segs = [np.asarray(
+                            p).reshape(-1, 2).astype('float32') for p in segs if len(p) >= 6]
                         if len(valid_segs) == 0:
-                            logger.error("Object {} in image {} has no valid polygons!".format(objid, img['file_name']))
+                            logger.error("Object {} in image {} has no valid polygons!".format(
+                                objid, img['file_name']))
                         elif len(valid_segs) < len(segs):
-                            logger.warn("Object {} in image {} has invalid polygons!".format(objid, img['file_name']))
+                            logger.warn("Object {} in image {} has invalid polygons!".format(
+                                objid, img['file_name']))
 
                         obj['segmentation'] = valid_segs
 
         # all geometrically-valid boxes are returned
-        boxes = np.asarray([obj['bbox'] for obj in valid_objs], dtype='float32')  # (n, 4)
+        boxes = np.asarray([obj['bbox']
+                            for obj in valid_objs], dtype='float32')  # (n, 4)
         cls = np.asarray([
             self.COCO_id_to_category_id[obj['category_id']]
             for obj in valid_objs], dtype='int32')  # (n,)
-        is_crowd = np.asarray([obj['iscrowd'] for obj in valid_objs], dtype='int8')
+        is_crowd = np.asarray([obj['iscrowd']
+                               for obj in valid_objs], dtype='int8')
 
         # add the keys
         img['boxes'] = boxes        # nx4
@@ -168,10 +173,10 @@ class COCODetection(object):
             # also required to be float32
             img['segmentation'] = [
                 obj['segmentation'] for obj in valid_objs]
-    
+
     def getClassNameFromSample(self, class_id):
         return self.coco.loadCats(self.category_id_to_COCO_id[int(class_id)])[0]["name"]
-    
+
     @staticmethod
     def load_many(basedir, names, add_gt=True, add_mask=False):
         """
@@ -186,26 +191,30 @@ class COCODetection(object):
             coco = COCODetection(basedir, n)
             ret.extend(coco.load(add_gt, add_mask=add_mask))
         return ret
-		
+
+
 def getClassesFromImg(img):
     return img["class"]
+
 
 def getMasksFromImg(img):
     is_crowd = img['is_crowd']
     segmentation = copy.deepcopy(img['segmentation'])
-    segmentation = [segmentation[k] for k in range(len(segmentation)) if not is_crowd[k]]
+    segmentation = [segmentation[k]
+                    for k in range(len(segmentation)) if not is_crowd[k]]
     height, width = img['height'], img['width']
     # Apply augmentation on polygon coordinates.
     # And produce one image-sized binary mask per box.
     masks = []
-    width_height = np.asarray([width, height], dtype=np.float32)
     for polys in segmentation:
         # if not cfg.DATA.ABSOLUTE_COORD:
         #     polys = [p * width_height for p in polys]
         # polys = [aug.augment_coords(p, params) for p in polys]
-        masks.append(segmentation_to_mask(polys, height, width))
+        masks.append(segmentation_to_mask(polys, height, width,
+                                          linear=(img['category_ids'] == [1])))
     masks = np.asarray(masks, dtype='uint8')    # values in {0, 1}
     return masks
+
 
 def genBoxesFromMasks(masks):
     """Compute bounding boxes from masks.
@@ -214,7 +223,7 @@ def genBoxesFromMasks(masks):
     """
     boxes = np.zeros([masks.shape[0], 4], dtype=np.int32)
     for i in range(masks.shape[0]):
-        m = masks[i ,:, :]
+        m = masks[i, :, :]
         # Bounding box.
         horizontal_indicies = np.where(np.any(m, axis=0))[0]
         vertical_indicies = np.where(np.any(m, axis=1))[0]
@@ -232,23 +241,29 @@ def genBoxesFromMasks(masks):
     return boxes.astype(np.int32)
 
 
-def segmentation_to_mask(polys, height, width):
+def segmentation_to_mask(polys, height, width, linear=False):
     """
     Convert polygons to binary masks.
     Args:
         polys: a list of nx2 float array. Each array contains many (x, y) coordinates.
+        height, width: dimensions of segmentation
+        linear: Boolean for erosion of linear cracks
     Returns:
         a binary matrix of (height, width)
     """
     polys = [p.flatten().tolist() for p in polys]
     assert len(polys) > 0, "Polygons are empty!"
 
-    import pycocotools.mask as cocomask
     rles = cocomask.frPyObjects(polys, height, width)
     rle = cocomask.merge(rles)
-    return cocomask.decode(rle)
+    res_rle = cocomask.decode(rle)
+    if linear:
+        return cv2.erode(res_rle, np.ones((6, 6), np.uint8))
+    else:
+        return res_rle
 
-def draw_mask(im, mask, box, label, alpha=0.5, color=None):
+
+def draw_mask(im, mask, box, label, alpha=0.5, color=None, linear=False):
     """
     Overlay a mask on top of the image.
     Args:
@@ -263,41 +278,64 @@ def draw_mask(im, mask, box, label, alpha=0.5, color=None):
     im = im.astype('uint8')
     color_tuple = tuple([int(c) for c in color])
     im = viz.draw_boxes(im, box[np.newaxis, :], [label], color=color_tuple)
-    return im
-	
+    cc = 1
+    if linear:
+        label, cc = scipy.ndimage.measurements.label(
+            mask, structure=np.ones((3, 3)))
+    return cc == 1, im
+
+
 def parse_args():
-    parser = argparse.ArgumentParser(description='Code for Harris corner detector tutorial.')
+    parser = argparse.ArgumentParser(
+        description='Code for Harris corner detector tutorial.')
     parser.add_argument('--imagedir', help='Path to dataset images.')
     parser.add_argument('--jsonfile', help='Path to json file.')
     parser.add_argument('--output')
     return parser.parse_args()
-	
+
+
 def main():
-	args = parse_args()
-	output_dir = args.output
-	ds = COCODetection(args.imagedir,args.jsonfile)
-	imgs = ds.load(add_gt=True, add_mask=True)
-	os.makedirs(output_dir, exist_ok=True)
-	for img in tqdm.tqdm(imgs):
-    	    # Get masks from "img" (it's actually the image's meta rather than the image itself)
-    	    # I follow the same naming from the Tensorpack's implementation of COCODetection
-    	    masks = getMasksFromImg(img)
-    	    boxes = genBoxesFromMasks(masks)
-    	    classes = getClassesFromImg(img) # Class IDs
-    	    classes = [ds.getClassNameFromSample(clsId) for clsId in classes] # Class names
-    	    file_name = img['file_name']
-    	    image_id = img['image_id']
-    	    im = cv2.imread(file_name)
-    	    orig_im = im.copy()
-    	    # Draw masks, boxes and labels
-    	    for i in range(masks.shape[0]):
-                im = draw_mask(im, masks[i], boxes[i], str(classes[i]))
-    	    basename = os.path.basename(file_name)
-    
-    	    output_path = os.path.join(output_dir, str(image_id) + '_' + basename)
-    	    # merge original image to the image with labels
-    	    im = np.concatenate([orig_im, im], axis=1)
-    	    cv2.imwrite(output_path, im)
+    errant_imgs = set()
+    args = parse_args()
+    output_dir = args.output
+    ds = COCODetection(args.imagedir, args.jsonfile)
+    imgs = ds.load(add_gt=True, add_mask=True)
+    os.makedirs(output_dir, exist_ok=True)
+    for img in tqdm.tqdm(imgs):
+        # Get masks from "img" (it's actually the image's meta rather than the image itself)
+        # I follow the same naming from the Tensorpack's implementation of COCODetection
+        masks = getMasksFromImg(img)
+        boxes = genBoxesFromMasks(masks)
+        classes = getClassesFromImg(img)  # Class IDs
+        classes = [ds.getClassNameFromSample(
+            clsId) for clsId in classes]  # Class names
+        file_name = img['file_name']
+        image_id = img['image_id']
+        im = cv2.imread(file_name)
+        orig_im = im.copy()
+        # Draw masks, boxes and labels
+        # For images with a linear crack, erosion is performed
+        for i in range(masks.shape[0]):
+            connected, im = draw_mask(im, masks[i], boxes[i], str(
+                classes[i]), linear=(img['category_ids'] == [1]))
+            if connected == False:
+                errant_imgs.add(img['path'])
+
+        basename = os.path.basename(file_name)
+        output_path = os.path.join(output_dir, str(image_id) + '_' + basename)
+
+        # merge original image to the image with labels
+        im = np.concatenate([orig_im, im], axis=1)
+        cv2.imwrite(output_path, im)
+
+    # Errant Images where mask erosion separated the cracks
+    if len(errant_imgs)!=0:
+        print(f"Number of Errant Images: {len(errant_imgs)}")
+        print("List of Errant Images:")
+        for img_err in errant_imgs:
+            print(img_err)
+    else:
+        print("No errant images")
 
 if __name__ == '__main__':
     main()
