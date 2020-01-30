@@ -303,10 +303,12 @@ def main():
         imgs = ds.load(add_gt=True, add_mask=True)
         for img in tqdm.tqdm(imgs):
             masks = getMasksFromImg(img)
+            image_id = img['image_id']
+            basename = os.path.basename(img['file_name'])
             for mask in masks:
                 if 1 in img['category_ids'] or 2 in img['category_ids']:
                     _, cc = scipy.ndimage.measurements.label(mask, structure=np.ones((3, 3)))
-                    if cc!=1: errant_imgs.add(img['path'])
+                    if cc!=1: errant_imgs.add(str(image_id)+'_'+basename)
     else:
         output_dir = args.output
         ds = COCODetection(args.imagedir, args.jsonfile)
