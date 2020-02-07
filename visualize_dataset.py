@@ -1,4 +1,4 @@
-
+from skimage import measure
 import cv2
 import numpy as np
 import pandas as pd
@@ -89,7 +89,7 @@ class COCODetection(object):
             assert add_gt
         with timed_operation('Load Groundtruth Boxes for {}'.format(self.name)):
             img_ids = self.coco.getImgIds()
-            img_ids.sort()
+            #img_ids.sort()
             # list of dict, each has keys: height,width,id,file_name
             imgs = self.coco.loadImgs(img_ids)
 
@@ -257,11 +257,20 @@ def segmentation_to_mask(polys, height, width, linear=False):
     rles = cocomask.frPyObjects(polys, height, width)
     rle = cocomask.merge(rles)
     res_rle = cocomask.decode(rle)
+    #print(mask_to_polygons(res_rle))
     if linear:
         return cv2.erode(res_rle, np.ones((6, 6), np.uint8))
     else:
         return res_rle
 
+def mask_to_polygons(mask):
+    polygons = []
+    contours = measure.find_contours(mask, 0.5)
+    for contour in contours:
+        contour = np.flip(contour, axis=1)
+        segmentation = contour.ravel().tolist()
+        polygons.append(segmentation)
+    return polygons
 
 def draw_mask(im, mask, box, label, alpha=0.5, color=None, linear=False):
     """
@@ -292,6 +301,7 @@ def parse_args():
     parser.add_argument('--jsonfile', help='Path to json file.')
     parser.add_argument('--check', help='Flag to purely check JSON', action='store_true', default = False)
     parser.add_argument('--output', help='Output Directory for images with masks', default='output_dir')
+    parser.add_argument('--outputjson', help='Output JSON', default="output.json")
     return parser.parse_args()
 
 
@@ -310,9 +320,11 @@ def main():
                     _, cc = scipy.ndimage.measurements.label(mask, structure=np.ones((3, 3)))
                     if cc!=1: errant_imgs.add(str(image_id)+'_'+basename)
     else:
+        annotations = []
         output_dir = args.output
         ds = COCODetection(args.imagedir, args.jsonfile)
         imgs = ds.load(add_gt=True, add_mask=True)
+        with open(args.jsonfile, 'r') as jsonfile: data = json.load(jsonfile) 
         os.makedirs(output_dir, exist_ok=True)
         for img in tqdm.tqdm(imgs):
             # Get masks from "img" (it's actually the image's meta rather than the image itself)
@@ -331,6 +343,7 @@ def main():
             for i in range(masks.shape[0]):
                 connected, im = draw_mask(im, masks[i], boxes[i], str(
                     classes[i]), linear=(img['category_ids'] == [1]))
+                annotations.append(mask_to_polygons(masks[i]))
                 if connected == False:
                     errant_imgs.add(img['path'])
 
@@ -340,7 +353,11 @@ def main():
             # merge original image to the image with labels
             im = np.concatenate([orig_im, im], axis=1)
             cv2.imwrite(output_path, im)
-
+        print(len(annotations))
+        with open(args.jsonfile, 'r') as json_file: data = json.load(json_file)
+        for i in range(len(annotations)):
+            data["annotations"][i]['segmentation']=annotations[i]
+        with open(args.output_json, 'w') as json_file: json.dump(data, json_file)
     # Errant Images where mask erosion separated the cracks
     if len(errant_imgs)!=0:
         print(f"Number of Errant Images: {len(errant_imgs)}")
